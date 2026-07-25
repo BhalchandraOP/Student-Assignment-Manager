@@ -1,0 +1,1 @@
+export default function Avatar({name,tone='blue'}){const initials=name.split(' ').map(x=>x[0]).slice(0,2).join('');return <span className={`avatar avatar--${tone}`} aria-label={name}>{initials}</span>}
