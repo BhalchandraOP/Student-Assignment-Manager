@@ -1,0 +1,11 @@
+com\studenttracker\util\package-info.class
+com\studenttracker\exception\package-info.class
+com\studenttracker\repository\package-info.class
+com\studenttracker\service\package-info.class
+com\studenttracker\dto\package-info.class
+com\studenttracker\mapper\package-info.class
+com\studenttracker\controller\package-info.class
+com\studenttracker\service\impl\package-info.class
+com\studenttracker\entity\package-info.class
+com\studenttracker\StudentAssignmentTrackerApplication.class
+com\studenttracker\config\CorsConfig.class

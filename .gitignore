@@ -6,3 +6,4 @@ backend/target/
 .run/
 .idea/
 .vscode/
+/.metadata/
