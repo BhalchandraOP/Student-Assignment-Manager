@@ -1,6 +1,6 @@
 # Student Assignment Tracker
 
-A full-stack application for managing student assignments, deadlines, submissions, courses, and academic progress.
+A full-stack application for managing student assignments, deadlines, submissions, courses, and academic progress with complete **Role-Based Access Control (RBAC)**.
 
 ## Table of contents
 
@@ -11,18 +11,19 @@ A full-stack application for managing student assignments, deadlines, submission
 5. [Configuration](#configuration)
 6. [Start and stop](#start-and-stop)
 7. [Authentication and authorization](#authentication-and-authorization)
-8. [API reference](#api-reference)
-9. [Database access](#database-access)
-10. [Build and test](#build-and-test)
-11. [Git setup](#git-setup)
+8. [Role-based workflows](#role-based-workflows)
+9. [API reference](#api-reference)
+10. [Database access](#database-access)
+11. [Build and test](#build-and-test)
+12. [Git setup](#git-setup)
 
 ## Technology stack
 
 | Area | Technology |
 | --- | --- |
-| Frontend | React, Vite, React Router, Lucide React |
-| Backend | Java 21, Spring Boot 3.5.16, Maven |
-| Security | Spring Security, JWT, BCrypt |
+| Frontend | React 19, Vite, React Router 7, Lucide React |
+| Backend | Java 21 / 22, Spring Boot 3.5.16, Maven |
+| Security | Spring Security 6, JWT (`io.jsonwebtoken` 0.13), BCrypt (12 rounds) |
 | Persistence | Spring Data JPA, Hibernate, Flyway |
 | Validation | Jakarta Bean Validation |
 | Database | MySQL 8.4 in Docker |
@@ -32,54 +33,50 @@ A full-stack application for managing student assignments, deadlines, submission
 
 ```mermaid
 flowchart LR
-    Browser[React / Vite] -->|REST / JSON + JWT| Controller
+    Browser[React / Vite] -->|REST / JSON + Bearer JWT| Controller
 
     subgraph Spring Boot API
-        Security[Spring Security / JWT filter]
-        Controller[Controller / DTO validation]
-        Service[Service contract]
-        Implementation[Service implementation]
-        Mapper[DTO and entity mapper]
-        Repository[Spring Data repository]
-        Exception[Global exception handler]
+        Security[Spring Security / JWT Filter]
+        Controller[REST Controllers / Validation]
+        Service[Service Interfaces & Logic]
+        Mapper[DTO and Entity Mapper]
+        Repository[Spring Data JPA Repositories]
+        Exception[Global Exception Handler]
 
         Security --> Controller
         Controller --> Service
-        Service --> Implementation
-        Implementation --> Mapper
-        Implementation --> Repository
+        Service --> Mapper
+        Service --> Repository
         Exception -. handles .-> Controller
     end
 
-    Repository -->|JPA / Hibernate| MySQL[(MySQL / Docker volume)]
+    Repository -->|JPA / Hibernate| MySQL[(MySQL 8.4 in Docker)]
 ```
 
 Backend package responsibilities:
 
 ```text
 com.studenttracker
-|-- config          Framework, CORS, security, and seed configuration
-|-- controller      Thin REST controllers
-|-- dto             Validated request and response contracts
-|-- entity          JPA persistence models
-|-- exception       Domain errors and global error handling
+|-- config          Framework, CORS, security, and demo seeding
+|-- controller      REST controllers (Auth, Assignments, Teacher, Admin)
+|-- dto             Validated request and response DTO records
+|-- entity          JPA persistence models (User, Role, RoleName)
+|-- exception       Domain errors and global exception handling
 |-- mapper          Entity and DTO conversion
 |-- repository      Spring Data persistence interfaces
-|-- security        JWT and authenticated-user infrastructure
+|-- security        JWT service and Spring Security filter infrastructure
 |-- service         Business service contracts
-|   `-- impl        Business service implementations
-`-- util            Small stateless shared utilities
+|   `-- impl        Service implementations (Auth, Assignments)
+`-- util            Shared utilities
 ```
 
 Architecture rules:
 
-- Controllers accept and return DTOs; entities are never exposed by APIs.
-- Business logic belongs in service implementations.
-- Services access repositories; controllers do not.
-- Required dependencies use constructor injection.
-- `spring.jpa.open-in-view=false` keeps persistence access out of the web layer.
-- `ddl-auto=validate` validates mappings without changing the schema.
-- Flyway owns all database schema changes.
+- Controllers accept and return validated DTOs; database entities are never exposed directly.
+- Business logic is encapsulated in service implementations.
+- Stateless authentication using HMAC-SHA256 signed JSON Web Tokens (`SessionCreationPolicy.STATELESS`).
+- Method-level security via `@PreAuthorize` combined with URL-level security matchers.
+- Flyway owns database migrations; Hibernate runs with `ddl-auto=validate`.
 
 ## Project structure
 
@@ -93,25 +90,28 @@ student-assignment-tracker/
 |   |-- mvnw.cmd
 |   `-- pom.xml
 |-- src/                      React source
-|-- compose.yaml              MySQL service
-|-- start-all.ps1             Start the complete stack
-|-- stop-all.ps1              Stop the complete stack
-|-- start-backend.ps1         Start Spring Boot
-|-- start-frontend.ps1        Start Vite
-|-- start-database.ps1        Start or verify MySQL
-|-- stop-database.ps1         Stop MySQL and retain its volume
+|   |-- components/           Re-usable components (ProtectedRoute, Brand, Avatar)
+|   |-- pages/                Pages (LandingPage, LoginPage, DashboardPage, UnauthorizedPage)
+|   `-- services/             authService (fetchWithAuth, login, logout, getSession)
+|-- compose.yaml              MySQL 8.4 Docker service
+|-- start-all.ps1             One-click stack start (Database + Backend + Frontend)
+|-- stop-all.ps1              One-click stack stop
+|-- start-backend.ps1         Start Spring Boot API (auto-loads .env & defaults)
+|-- start-frontend.ps1        Start Vite dev server
+|-- start-database.ps1        Start and healthcheck MySQL container
+|-- stop-database.ps1         Stop MySQL container and preserve persistent volume
 |-- package.json
 `-- vite.config.js
 ```
 
 ## Prerequisites
 
-- Docker Desktop or another Docker-compatible engine
+- Docker Desktop (or another Docker-compatible engine)
 - Java 21 or newer
 - Node.js 20 LTS or newer with npm
 - PowerShell 5.1 or newer
 
-Maven does not need to be installed globally; the repository includes Maven Wrapper.
+Maven does not need to be installed globally; the repository includes Maven Wrapper (`mvnw.cmd`).
 
 ## Configuration
 
@@ -120,14 +120,14 @@ Maven does not need to be installed globally; the repository includes Maven Wrap
 | Service | Address |
 | --- | --- |
 | Landing page | http://localhost:5173 |
-| Login | http://localhost:5173/login |
+| Login page | http://localhost:5173/login |
 | Dashboard | http://localhost:5173/dashboard |
 | Backend API | http://localhost:8081 |
-| MySQL | `localhost:3307` |
+| MySQL Host Port | `localhost:3307` |
 
 ### Database defaults
 
-| Setting | Development value |
+| Setting | Value |
 | --- | --- |
 | Database | `student_assignment_tracker` |
 | Username | `tracker_app` |
@@ -135,50 +135,39 @@ Maven does not need to be installed globally; the repository includes Maven Wrap
 | Host port | `3307` |
 | Container port | `3306` |
 
-Copy `.env.example` to `.env` to override Docker values. The `.env` file is ignored by Git.
-
-### Backend environment variables
-
-| Variable | Default |
-| --- | --- |
-| `DB_HOST` | `localhost` |
-| `DB_PORT` | `3307` |
-| `DB_NAME` | `student_assignment_tracker` |
-| `DB_USERNAME` | `tracker_app` |
-| `DB_PASSWORD` | `tracker_dev_password` |
-| `DB_POOL_SIZE` | `10` |
-| `SERVER_PORT` | `8081` |
-| `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` |
-| `JWT_EXPIRATION` | `PT8H` |
-| `DEMO_USER_ENABLED` | `true` |
-
-Use environment variables or a secret manager for deployed environments. Never deploy the development database password or JWT secret.
+Copy `.env.example` to `.env` to override Docker or backend defaults if needed.
 
 ## Start and stop
 
-Run scripts from the project root:
+Run scripts from the project root directory:
 
 ```powershell
 Set-Location E:\projects\student-assignment-tracker
 ```
 
-### Start the complete stack
+### Start the complete stack (1 command)
 
 ```powershell
 .\start-all.ps1
+# or
+npm start
 ```
 
-This starts or verifies MySQL, then opens separate backend and frontend PowerShell windows. PID files are stored under the ignored `.run` directory.
+This automatically:
+1. Starts the Docker MySQL container and waits until healthy (`localhost:3307`).
+2. Opens the Spring Boot API (`http://localhost:8081`).
+3. Opens the Vite frontend (`http://localhost:5173`).
+4. Tracks process IDs in `.run/` for clean termination.
 
-If Docker CLI is unavailable but MySQL is already reachable on port `3307`, startup continues safely.
-
-### Stop the complete stack
+### Stop the complete stack (1 command)
 
 ```powershell
 .\stop-all.ps1
+# or
+npm run stop
 ```
 
-This stops the frontend and backend process trees created by `start-all.ps1`, then stops the MySQL container. The named database volume is retained.
+Stops backend and frontend process trees and cleanly shuts down the database container while preserving the MySQL data volume.
 
 ### Start services individually
 
@@ -188,71 +177,79 @@ This stops the frontend and backend process trees created by `start-all.ps1`, th
 .\start-frontend.ps1
 ```
 
-Stop only MySQL:
-
-```powershell
-.\stop-database.ps1
-```
-
-Individual frontend/backend scripts are not PID-tracked by `stop-all.ps1`; close their PowerShell windows to stop them.
-
 ## Authentication and authorization
 
-Authentication is database-backed and stateless. Passwords are stored as BCrypt hashes, and successful login returns an HMAC-signed JWT. The browser stores the session in `sessionStorage`, which is cleared when the tab is closed or the user logs out.
+Authentication is database-backed and stateless. Passwords are encrypted with BCrypt (12 rounds) and successful authentication returns a signed JWT.
 
-Development demo account:
+### Pre-configured demo accounts
 
-```text
-Email:    student@example.com
-Password: Student@123
-Role:     ROLE_STUDENT
-```
+Built-in demo accounts are seeded idempotently by `DemoUserInitializer` on backend startup:
 
-The account is created idempotently on backend startup. Disable it outside local development:
+| Role | Email | Password | Permissions |
+| :--- | :--- | :--- | :--- |
+| **Student** | `student@example.com` | `Student@123` | View coursework, submit work, undo submission, view grades |
+| **Student 2** | `student2@example.com` | `Student@123` | Second student profile in database |
+| **Teacher** | `teacher@example.com` | `Teacher@123` | Create assignments, delete assignments, grade student work |
+| **Admin** | `admin@example.com` | `Admin@123` | Audit MySQL users, system status, all privileges |
 
-```powershell
-$env:DEMO_USER_ENABLED = 'false'
-```
+On the Login screen (`http://localhost:5173/login`), **1-click Role Selector presets** are provided for instant switching during live demonstrations.
 
-Provide a unique JWT secret of at least 32 bytes for deployed environments:
+## Role-based workflows
 
-```powershell
-$env:JWT_SECRET = 'replace-with-a-long-random-production-secret'
-```
+### 1. Student Workflow
+- **Browse Coursework**: View active course assignments, deadlines, and instructor information.
+- **Submit Work**: Click **"Submit Work"** to provide repository URLs or solution notes. Status updates to `Submitted`.
+- **Undo Submission**: If submitted coursework has not yet been evaluated by an instructor, the student can click **"Undo Submission"** to revert it back to `Pending` and adjust their submission.
+- **View Grades & Remarks**: In the *My Submissions* tab, view evaluated grades (e.g. `28/30`) and teacher remarks.
+
+### 2. Teacher Workflow
+- **Publish Assignments**: Click **"+ Create Assignment"** in *Manage Assignments* to publish new coursework with title, course, and due date. The assignment immediately reflects in all student lists.
+- **Grading Queue**: View submitted student work in *Grade Submissions*.
+- **Grade & Feedback**: Click **"Grade Work"** to assign marks and instructor comments. The grade instantly syncs to the student's submission view.
+- **Delete Assignment**: Remove assignments with confirmation.
+
+### 3. Administrator Workflow
+- **Database User Management**: The *User Management* tab queries the live Spring Boot endpoint `GET /api/admin/users` to fetch all accounts from the MySQL database with active roles.
+- **Route & Access Protection**: Students or teachers attempting to access Admin endpoints or pages are denied with an HTTP 403 Forbidden notice.
 
 ## API reference
 
-| Method | Endpoint | Authorization |
-| --- | --- | --- |
-| `POST` | `/api/auth/login` | Public |
-| `GET` | `/api/auth/me` | Bearer token |
-| `GET` | `/api/admin/access-check` | `ROLE_ADMIN` |
+### Authentication
 
-Login example:
+| Method | Endpoint | Authorization | Description |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/auth/login` | Public | Authenticates credentials and returns JWT Bearer token |
+| `GET` | `/api/auth/me` | Authenticated | Retrieves current authenticated user profile and roles |
 
-```powershell
-$body = @{
-  email = 'student@example.com'
-  password = 'Student@123'
-} | ConvertTo-Json
+### Assignments & Submissions
 
-$login = Invoke-RestMethod `
-  -Uri 'http://localhost:8081/api/auth/login' `
-  -Method Post `
-  -ContentType 'application/json' `
-  -Body $body
-```
+| Method | Endpoint | Authorization | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/assignments` | Authenticated | Retrieves all assignments, submission states, and grades |
+| `POST` | `/api/assignments` | `ROLE_TEACHER`, `ROLE_ADMIN` | Creates and publishes a new assignment |
+| `POST` | `/api/assignments/{id}/submit` | `ROLE_STUDENT`, `ROLE_ADMIN` | Submits solution text or repository link |
+| `POST` | `/api/assignments/{id}/revert` | `ROLE_STUDENT`, `ROLE_ADMIN` | Undoes/reverts submission back to `Pending` |
+| `POST` | `/api/assignments/{id}/grade` | `ROLE_TEACHER`, `ROLE_ADMIN` | Grades submission with score and instructor feedback |
+| `DELETE` | `/api/assignments/{id}` | `ROLE_TEACHER`, `ROLE_ADMIN` | Deletes an assignment |
 
-Call an authenticated endpoint:
+### Teacher Endpoints
 
-```powershell
-$headers = @{ Authorization = "Bearer $($login.accessToken)" }
-Invoke-RestMethod -Uri 'http://localhost:8081/api/auth/me' -Headers $headers
-```
+| Method | Endpoint | Authorization | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/teacher/access-check` | `ROLE_TEACHER`, `ROLE_ADMIN` | Verifies teacher security privilege |
+| `GET` | `/api/teacher/summary` | `ROLE_TEACHER`, `ROLE_ADMIN` | Retrieves active assignments and grading metrics |
+
+### Admin Endpoints
+
+| Method | Endpoint | Authorization | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/admin/access-check` | `ROLE_ADMIN` | Verifies administrator security privilege |
+| `GET` | `/api/admin/summary` | `ROLE_ADMIN` | Retrieves system health and total user metrics |
+| `GET` | `/api/admin/users` | `ROLE_ADMIN` | Returns all registered users from the MySQL database |
 
 ## Database access
 
-Enter MySQL inside the container:
+Log into MySQL inside the running container:
 
 ```powershell
 docker exec -it student-assignment-tracker-mysql mysql -u tracker_app -ptracker_dev_password student_assignment_tracker
@@ -262,100 +259,53 @@ Useful queries:
 
 ```sql
 SHOW TABLES;
-DESCRIBE app_users;
-DESCRIBE roles;
-DESCRIBE user_roles;
+SELECT id, email, full_name, enabled FROM app_users;
 
-SELECT
-    u.id,
-    u.email,
-    u.full_name,
-    u.enabled,
+-- View users with their assigned roles
+SELECT 
+    u.id, 
+    u.email, 
+    u.full_name, 
     r.name AS role
 FROM app_users u
 JOIN user_roles ur ON ur.user_id = u.id
 JOIN roles r ON r.id = ur.role_id;
+
+-- View Flyway migrations
+SELECT installed_rank, version, description, success FROM flyway_schema_history;
 ```
 
 Exit MySQL:
-
 ```sql
 exit;
-```
-
-### Add a local development student
-
-This example copies the demo account's BCrypt hash, so the temporary password remains `Student@123`. Use a validated administration API instead of direct SQL in production.
-
-```sql
-INSERT INTO app_users (
-    email, password_hash, full_name, enabled, created_at, updated_at
-)
-SELECT
-    'student2@example.com',
-    password_hash,
-    'Second Student',
-    TRUE,
-    CURRENT_TIMESTAMP(6),
-    CURRENT_TIMESTAMP(6)
-FROM app_users
-WHERE email = 'student@example.com';
-
-SET @new_user_id = (
-    SELECT id FROM app_users WHERE email = 'student2@example.com'
-);
-
-SET @student_role_id = (
-    SELECT id FROM roles WHERE name = 'ROLE_STUDENT'
-);
-
-INSERT INTO user_roles (user_id, role_id)
-VALUES (@new_user_id, @student_role_id);
 ```
 
 ## Build and test
 
 Frontend production build:
-
 ```powershell
 npm run build
 ```
 
-Backend tests:
-
+Backend test suite:
 ```powershell
 Set-Location backend
 .\mvnw.cmd test
 ```
 
 Backend production package:
-
 ```powershell
 Set-Location backend
 .\mvnw.cmd clean package
 ```
 
-The packaged JAR is generated under `backend/target/`.
+The compiled executable JAR is generated under `backend/target/`.
 
 ## Git setup
 
-Only use these commands when initializing a new local repository:
-
 ```powershell
-git init
+git status
 git add .
-git commit -m "Initial commit"
-git branch -M main
-git remote add origin https://github.com/BhalchandraOP/Student-Assignment-Manager.git
-git push -u origin main
+git commit -m "Implement full-stack role-based authorization, assignment workflows, and documentation"
+git push origin main
 ```
-
-## Current scope
-
-- Responsive landing, login, and dashboard pages
-- Database-backed JWT authentication
-- Role-based backend authorization
-- Dockerized MySQL with persistent storage and health checks
-- Spring Boot layered architecture with Flyway migrations
-
-Assignment-domain APIs and live dashboard data will be added one feature at a time.

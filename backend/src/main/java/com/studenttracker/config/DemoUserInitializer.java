@@ -35,12 +35,18 @@ public class DemoUserInitializer implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments arguments) {
-        if (userRepository.existsByEmailIgnoreCase(email)) {
+        seedUserIfMissing(email, password, fullName, RoleName.ROLE_STUDENT);
+        seedUserIfMissing("teacher@example.com", "Teacher@123", "Prof. Sharma", RoleName.ROLE_TEACHER);
+        seedUserIfMissing("admin@example.com", "Admin@123", "System Administrator", RoleName.ROLE_ADMIN);
+    }
+
+    private void seedUserIfMissing(String userEmail, String rawPassword, String userFullName, RoleName roleName) {
+        if (userRepository.existsByEmailIgnoreCase(userEmail)) {
             return;
         }
 
-        Role studentRole = roleRepository.findByName(RoleName.ROLE_STUDENT)
-                .orElseThrow(() -> new IllegalStateException("ROLE_STUDENT was not created by Flyway"));
-        userRepository.save(new User(email, passwordEncoder.encode(password), fullName, studentRole));
+        Role role = roleRepository.findByName(roleName)
+                .orElseThrow(() -> new IllegalStateException(roleName + " was not created by Flyway"));
+        userRepository.save(new User(userEmail, passwordEncoder.encode(rawPassword), userFullName, role));
     }
 }

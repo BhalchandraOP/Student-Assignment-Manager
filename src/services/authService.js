@@ -15,3 +15,27 @@ export function getSession() {
   } catch { sessionStorage.removeItem(SESSION_KEY); return null; }
 }
 export function logout() { sessionStorage.removeItem(SESSION_KEY); }
+
+export async function fetchWithAuth(endpoint, options = {}) {
+  const session = getSession();
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(session?.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {}),
+    ...(options.headers || {}),
+  };
+
+  const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const response = await fetch(`${API_URL}${path}`, {
+    ...options,
+    headers,
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(payload.message || `Request failed with status ${response.status}`);
+    error.status = response.status;
+    error.payload = payload;
+    throw error;
+  }
+  return payload;
+}
